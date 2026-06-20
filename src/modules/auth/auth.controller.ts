@@ -244,6 +244,35 @@ export class AuthController {
   }
 
   /**
+   * GET /auth/me — return current user profile (requires Bearer token)
+   */
+  static async me(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user!.id },
+        include: { patient: true, doctor: true },
+      });
+      if (!user) throw new AppError(404, "User not found", "USER_NOT_FOUND");
+
+      res.json({
+        success: true,
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            phone: user.phone,
+            role: user.role,
+            patient: user.patient,
+            doctor: user.doctor,
+          },
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Logout
    */
   static async logout(req: Request, res: Response, next: NextFunction) {
