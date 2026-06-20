@@ -1,0 +1,575 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── USER & ROLES ────────────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String?
+  phone        String?
+  role         Role
+  isVerified   Boolean   @default(false)
+  isSuspended  Boolean   @default(false)
+  twoFAEnabled Boolean   @default(false)
+  twoFASecret  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime? // soft delete
+
+  patient       Patient?
+  doctor        Doctor?
+  orgAdmin      OrgAdmin?
+  subscription  Subscription?
+  notifications Notification[]
+  sessions      UserSession[]
+  auditLogs     AuditLog[]     @relation("AuditActor")
+  couponUsages  CouponUsage[]
+}
+
+enum Role {
+  PATIENT
+  DOCTOR
+  ORG_ADMIN
+  PLATFORM_ADMIN
+}
+
+model UserSession {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String    @unique
+  deviceInfo   String?
+  ipAddress    String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ─── PATIENT ─────────────────────────────────────────────────────────────────
+
+model Patient {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName         String
+  dateOfBirth      DateTime?
+  gender           String?
+  bloodGroup       String?
+  heightCm         Float?
+  weightKg         Float?
+  allergies        String[]
+  currentMeds      Json? // [{name, dosage, frequency, notes}]
+  emergencyContact Json? // {name, phone, relation}
+  insuranceInfo    Json? // {provider, policyNumber, expiryDate}
+  avatarUrl        String?
+
+  medicalRecords MedicalRecord[]
+  linkedDoctors  PatientDoctorLink[]
+  appointments   Appointment[]
+  chatSessions   ChatSession[]
+  prescriptions  Prescription[]
+
+  @@index([userId])
+}
+
+// ─── DOCTOR / PROVIDER ───────────────────────────────────────────────────────
+
+model Doctor {
+  id              String        @id @default(cuid())
+  userId          String        @unique
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName        String
+  specialisation  String
+  licenceNumber   String        @unique
+  licenceVerified Boolean       @default(false)
+  consultationFee Float?
+  bio             String?
+  avatarUrl       String?
+  orgId           String?
+  organisation    Organisation? @relation(fields: [orgId], references: [id])
+
+  availabilitySlots AvailabilitySlot[]
+  linkedPatients    PatientDoctorLink[]
+  appointments      Appointment[]
+  prescriptions     Prescription[]
+  doctorNotes       DoctorNote[]
+
+  @@index([userId])
+  @@index([orgId])
+}
+
+model Organisation {
+  id      String    @id @default(cuid())
+  name    String
+  type    OrgType
+  address String?
+  logoUrl String?
+  doctors Doctor[]
+  admins  OrgAdmin[]
+}
+
+enum OrgType {
+  HOSPITAL
+  CLINIC
+  DIAGNOSTIC_LAB
+  OTHER
+}
+
+model OrgAdmin {
+  id     String       @id @default(cuid())
+  userId String       @unique
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgId  String
+  org    Organisation @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+// ─── PATIENT-DOCTOR LINKING ──────────────────────────────────────────────────
+
+model PatientDoctorLink {
+  id             String        @id @default(cuid())
+  patientId      String
+  doctorId       String
+  patient        Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor         Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  status         LinkStatus    @default(PENDING)
+  initiatedBy    LinkInitiator
+  accessScope    AccessScope   @default(ALL)
+  scopeRecordIds String[] // empty = ALL; populated = specific records only
+  expiresAt      DateTime?
+  requestedAt    DateTime      @default(now())
+  respondedAt    DateTime?
+  revokedAt      DateTime?
+  inviteToken    String?       @unique // for email invite flow
+
+  @@unique([patientId, doctorId])
+  @@index([patientId])
+  @@index([doctorId])
+}
+
+enum LinkStatus {
+  PENDING
+  APPROVED
+  DENIED
+  REVOKED
+  EXPIRED
+}
+
+enum LinkInitiator {
+  PATIENT
+  DOCTOR
+}
+
+enum AccessScope {
+  ALL
+  SELECTED
+}
+
+// ─── MEDICAL RECORDS ─────────────────────────────────────────────────────────
+
+model MedicalRecord {
+  id               String          @id @default(cuid())
+  patientId        String
+  patient          Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  uploadedById     String // userId — patient or doctor
+  fileName         String
+  fileKey          String // S3 object key
+  fileSize         Int // bytes
+  mimeType         String
+  recordType       RecordType
+  recordDate       DateTime?
+  facilityName     String?
+  uploadedAt       DateTime        @default(now())
+  processingStatus ProcessingStatus @default(PENDING)
+  deletedAt        DateTime? // soft delete
+
+  aiResult        RecordAIResult?
+  extractedValues RecordExtractedValue[]
+  prescriptions   Prescription[]
+  doctorNotes     DoctorNote[]
+  vectorChunks    RecordVectorChunk[]
+
+  @@index([patientId])
+  @@index([processingStatus])
+  @@index([patientId, recordType])
+}
+
+enum RecordType {
+  BLOOD_TEST
+  URINE_TEST
+  IMAGING_XRAY
+  IMAGING_MRI
+  IMAGING_CT
+  IMAGING_ULTRASOUND
+  PRESCRIPTION
+  DISCHARGE_SUMMARY
+  VACCINATION
+  DENTAL
+  OPHTHALMOLOGY
+  OTHER
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  PARTIAL
+}
+
+model RecordAIResult {
+  id              String        @id @default(cuid())
+  recordId        String        @unique
+  record          MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  summaryText     String // plain-English patient-facing summary
+  clinicalSummary String? // doctor-facing clinical summary
+  extractedRaw    Json // full OCR output
+  confidence      Float // 0–1 overall confidence
+  flaggedValues   Json? // [{key, value, severity}]
+  processedAt     DateTime      @default(now())
+  modelVersion    String // track which AI model version was used
+}
+
+model RecordExtractedValue {
+  id             String        @id @default(cuid())
+  recordId       String
+  record         MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  parameterKey   String // canonical key e.g. "HBA1C"
+  parameterLabel String // display label e.g. "HbA1c"
+  value          Float
+  unit           String
+  referenceMin   Float?
+  referenceMax   Float?
+  isAbnormal     Boolean
+  severity       String? // "MILD" | "MODERATE" | "CRITICAL"
+  recordDate     DateTime // copied from parent for efficient time-series queries
+
+  @@index([recordId])
+  @@index([parameterKey, recordDate])
+}
+
+// ─── DOCTOR NOTES ─────────────────────────────────────────────────────────────
+
+model DoctorNote {
+  id        String        @id @default(cuid())
+  doctorId  String
+  doctor    Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  recordId  String?
+  record    MedicalRecord? @relation(fields: [recordId], references: [id])
+  patientId String
+  content   String // markdown
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([doctorId, patientId])
+}
+
+// ─── APPOINTMENTS ─────────────────────────────────────────────────────────────
+
+model Appointment {
+  id            String            @id @default(cuid())
+  patientId     String
+  doctorId      String
+  patient       Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor        Doctor            @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  scheduledAt   DateTime
+  durationMins  Int               @default(30)
+  status        AppointmentStatus @default(SCHEDULED)
+  type          AppointmentType   @default(VIDEO)
+  notes         String?
+  cancelReason  String?
+  videoSession  VideoSession?
+  prescriptions Prescription[]
+  createdAt     DateTime          @default(now())
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([scheduledAt])
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum AppointmentType {
+  VIDEO
+  IN_PERSON
+}
+
+model AvailabilitySlot {
+  id        String  @id @default(cuid())
+  doctorId  String
+  doctor    Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  dayOfWeek Int // 0=Sun, 1=Mon ... 6=Sat
+  startTime String // "09:00"
+  endTime   String // "17:00"
+  slotMins  Int     @default(30)
+  isActive  Boolean @default(true)
+
+  @@index([doctorId])
+}
+
+// ─── VIDEO SESSIONS ───────────────────────────────────────────────────────────
+
+model VideoSession {
+  id            String      @id @default(cuid())
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  roomId        String      @unique @default(cuid())
+  status        VideoStatus @default(WAITING)
+  startedAt     DateTime?
+  endedAt       DateTime?
+  recordingKey  String? // S3 key if recording enabled
+  iceServers    Json? // STUN/TURN config snapshot
+}
+
+enum VideoStatus {
+  WAITING
+  ACTIVE
+  ENDED
+}
+
+// ─── PRESCRIPTIONS ────────────────────────────────────────────────────────────
+
+model Prescription {
+  id            String         @id @default(cuid())
+  patientId     String
+  doctorId      String
+  appointmentId String?
+  recordId      String? // linked MedicalRecord when uploaded as document
+  patient       Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor        Doctor         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  record        MedicalRecord? @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  appointment   Appointment?   @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  medicines     Json // [{name, dosage, frequency, duration, notes}]
+  notes         String?
+  issuedAt      DateTime       @default(now())
+
+  @@index([patientId])
+  @@index([doctorId])
+}
+
+// ─── AI CHAT ─────────────────────────────────────────────────────────────────
+
+model ChatSession {
+  id        String        @id @default(cuid())
+  patientId String
+  patient   Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  title     String?
+  createdAt DateTime      @default(now())
+  messages  ChatMessage[]
+
+  @@index([patientId])
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      ChatRole
+  content   String
+  citations Json? // [{recordId, excerpt, parameterKey}]
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId])
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+// ─── SUBSCRIPTIONS & PAYMENTS ────────────────────────────────────────────────
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  userId             String             @unique
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan               PlanTier
+  billingCycle       BillingCycle
+  status             SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean            @default(false)
+  stripeSubId        String?            @unique
+  razorpaySubId      String?            @unique
+  payments           Payment[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+}
+
+enum PlanTier {
+  FREE
+  BASIC
+  PRO
+  FAMILY
+  DOCTOR_STARTER
+  DOCTOR_PROFESSIONAL
+  DOCTOR_ENTERPRISE
+  PRO_6M
+  PRO_1Y
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  SIX_MONTHS
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  PAUSED
+  TRIALING
+}
+
+model Payment {
+  id                String          @id @default(cuid())
+  subscriptionId    String
+  subscription      Subscription    @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  amount            Float           // final charged amount (after discount), in INR
+  currency          String          @default("INR")
+  status            PaymentStatus
+  provider          PaymentProvider
+  providerPaymentId String?         // Razorpay payment_id after capture
+  razorpayOrderId   String?         @unique // Razorpay order_id (created before checkout)
+  discountAmount    Float           @default(0)
+  couponCode        String?
+  invoiceUrl        String?
+  failureReason     String?
+  paidAt            DateTime?
+  createdAt         DateTime        @default(now())
+
+  @@index([subscriptionId])
+  @@index([razorpayOrderId])
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  STRIPE
+  RAZORPAY
+}
+
+// ─── COUPONS ─────────────────────────────────────────────────────────────────
+
+model Coupon {
+  id              String       @id @default(cuid())
+  code            String       @unique // e.g. "LAUNCH50"
+  discountType    DiscountType @default(PERCENTAGE)
+  discountValue   Float        // 50 = 50%, or 250 = ₹250 fixed
+  maxUses         Int?         // null = unlimited
+  usedCount       Int          @default(0)
+  validFrom       DateTime     @default(now())
+  validUntil      DateTime?    // null = no expiry
+  isActive        Boolean      @default(true)
+  applicablePlans PlanTier[]   // empty array = applies to all paid plans
+  description     String?
+  createdAt       DateTime     @default(now())
+
+  usages CouponUsage[]
+
+  @@index([code])
+}
+
+model CouponUsage {
+  id       String   @id @default(cuid())
+  couponId String
+  coupon   Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usedAt   DateTime @default(now())
+
+  @@unique([couponId, userId]) // one use per user per coupon
+  @@index([userId])
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+}
+
+enum NotificationType {
+  ACCESS_REQUEST
+  ACCESS_APPROVED
+  ACCESS_REVOKED
+  DOCTOR_INVITE
+  NEW_PRESCRIPTION
+  APPOINTMENT_REMINDER
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  REPORT_PROCESSED
+  SYSTEM
+}
+
+// ─── AUDIT LOG ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorId      String
+  actor        User     @relation("AuditActor", fields: [actorId], references: [id], onDelete: Cascade)
+  actorRole    Role
+  action       String // "VIEW_RECORD" | "DOWNLOAD_RECORD" | "UPDATE_PROFILE"
+  resourceType String // "MedicalRecord" | "PatientProfile"
+  resourceId   String // ID of the resource — not a FK (polymorphic)
+  metadata     Json?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  @@index([actorId])
+  @@index([resourceId])
+  @@index([createdAt])
+}
+
+// ─── VECTOR DB CHUNKS FOR RAG ───────────────────────────────────────────────
+
+model RecordVectorChunk {
+  id        String        @id @default(cuid())
+  recordId  String
+  record    MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  patientId String
+  content   String
+  metadata  Json
+  embedding Unsupported("vector(768)")?
+
+  @@index([recordId])
+  @@index([patientId])
+}
