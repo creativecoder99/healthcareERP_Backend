@@ -42,25 +42,25 @@ const worker = new Worker(
     });
 
     try {
-      // 3. Download file buffer from S3/MinIO
-      logger.info(`📥 Downloading file for record ${recordId} from S3/MinIO...`);
-      const getObjectCommand = new GetObjectCommand({
-        Bucket: env.S3_BUCKET_DOCUMENTS,
-        Key: record.fileKey,
-      });
-
-      const s3Response = await s3Client.send(getObjectCommand);
-      const responseStream = s3Response.Body;
-      if (!responseStream) {
-        throw new Error("S3 object body is empty");
+      // 3. Get file buffer — from job data (preferred) or fall back to S3 download
+      let fileBuffer: Buffer;
+      if (job.data.fileBase64) {
+        fileBuffer = Buffer.from(job.data.fileBase64, "base64");
+        logger.info(`📦 Using in-memory file buffer (${fileBuffer.length} bytes)`);
+      } else {
+        logger.info(`📥 Downloading file for record ${recordId} from S3...`);
+        const s3Response = await s3Client.send(new GetObjectCommand({
+          Bucket: env.S3_BUCKET_DOCUMENTS,
+          Key: record.fileKey,
+        }));
+        if (!s3Response.Body) throw new Error("S3 object body is empty");
+        const chunks: Buffer[] = [];
+        for await (const chunk of s3Response.Body as any) {
+          chunks.push(Buffer.from(chunk));
+        }
+        fileBuffer = Buffer.concat(chunks);
+        logger.info(`📥 Downloaded file buffer (${fileBuffer.length} bytes)`);
       }
-
-      const chunks: Buffer[] = [];
-      for await (const chunk of responseStream as any) {
-        chunks.push(Buffer.from(chunk));
-      }
-      const fileBuffer = Buffer.concat(chunks);
-      logger.info(`📥 Ingested file buffer (${fileBuffer.length} bytes)`);
 
       // 4. Call Gemini service for multimodal analysis (OCR + extraction + summaries)
       logger.info(`🧠 Calling Gemini 1.5 Flash analyzer...`);

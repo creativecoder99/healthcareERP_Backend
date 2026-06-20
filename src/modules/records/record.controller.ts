@@ -113,8 +113,8 @@ export class RecordController {
         },
       });
 
-      // Trigger asynchronous background processing job
-      await addAIProcessingJob(record.id);
+      // Trigger asynchronous background processing job (pass buffer so worker skips S3 download)
+      await addAIProcessingJob(record.id, file.buffer);
 
       res.status(201).json({
         success: true,

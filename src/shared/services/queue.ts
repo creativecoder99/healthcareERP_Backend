@@ -20,9 +20,12 @@ export const aiProcessingQueue = new Queue(QUEUE_NAME, {
 /**
  * Enqueue a new medical record processing job
  */
-export async function addAIProcessingJob(recordId: string) {
+export async function addAIProcessingJob(recordId: string, fileBuffer?: Buffer) {
   try {
-    const job = await aiProcessingQueue.add("PROCESS_REPORT", { recordId });
+    const job = await aiProcessingQueue.add("PROCESS_REPORT", {
+      recordId,
+      fileBase64: fileBuffer ? fileBuffer.toString("base64") : null,
+    });
     logger.info(`💼 Enqueued AI processing job ${job.id} for record: ${recordId}`);
     return job;
   } catch (error: any) {

@@ -26,10 +26,17 @@ if (env.S3_ENDPOINT) {
 
 export const s3Client = new S3Client(s3Config);
 
+// S3 is considered enabled only when real credentials are present
+const s3Enabled = !!(env.S3_ACCESS_KEY && env.S3_SECRET_KEY);
+if (!s3Enabled) {
+  logger.warn("⚠️  S3_ACCESS_KEY / S3_SECRET_KEY not set — file storage disabled. AI processing will still work via in-memory buffer.");
+}
+
 /**
  * Ensure the documents bucket exists in MinIO/S3
  */
 export async function ensureBucketExists(): Promise<void> {
+  if (!s3Enabled) return;
   const bucketName = env.S3_BUCKET_DOCUMENTS;
   try {
     await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
@@ -60,6 +67,10 @@ export async function uploadFile(
   buffer: Buffer,
   mimeType: string
 ): Promise<void> {
+  if (!s3Enabled) {
+    logger.warn(`S3 not configured — skipping persistent storage for: ${key}`);
+    return;
+  }
   try {
     await s3Client.send(
       new PutObjectCommand({
@@ -83,6 +94,10 @@ export async function generateSignedUrl(
   key: string,
   expiresInSeconds = 900
 ): Promise<string> {
+  if (!s3Enabled) {
+    logger.warn(`S3 not configured — cannot generate signed URL for: ${key}`);
+    return "";
+  }
   try {
     const command = new GetObjectCommand({
       Bucket: env.S3_BUCKET_DOCUMENTS,
@@ -102,6 +117,10 @@ export async function generateSignedUrl(
  * Delete a file from S3
  */
 export async function deleteFile(key: string): Promise<void> {
+  if (!s3Enabled) {
+    logger.warn(`S3 not configured — skipping delete for: ${key}`);
+    return;
+  }
   try {
     await s3Client.send(
       new DeleteObjectCommand({

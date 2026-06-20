@@ -77,6 +77,11 @@ import { initSocketServer } from "./shared/services/socket";
 const httpServer = createServer(app);
 initSocketServer(httpServer);
 
+// ─── AI Worker (runs in-process for single-service deployment) ───────────────
+import("./workers/ai-worker")
+  .then(() => logger.info("⚙️  AI processing worker started in-process"))
+  .catch((err) => logger.error("Failed to start AI worker:", err));
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 if (env.NODE_ENV !== "test") {
   const server = httpServer.listen(env.PORT, () => {
