@@ -20,8 +20,8 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRES_IN: z.string().default("7d"),
 
   S3_ENDPOINT: z.string().optional(),
-  S3_ACCESS_KEY: z.string().min(1),
-  S3_SECRET_KEY: z.string().min(1),
+  S3_ACCESS_KEY: z.string().optional(),
+  S3_SECRET_KEY: z.string().optional(),
   S3_BUCKET_DOCUMENTS: z.string().default("medicore-documents"),
   S3_REGION: z.string().default("us-east-1"),
 
