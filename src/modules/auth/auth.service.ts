@@ -7,6 +7,7 @@ import { env } from "../../config/env";
 import { AppError } from "../../shared/middleware/errorHandler";
 import { logger } from "../../config/logger";
 import { Role } from "@prisma/client";
+import { sendOtpEmail } from "../../shared/services/email.service";
 
 export class AuthService {
   /**
@@ -242,11 +243,14 @@ export class AuthService {
    */
   static async generateOtp(emailOrPhone: string): Promise<string> {
     const otp = crypto.randomInt(100000, 999999).toString();
-    // Cache in Redis for 5 minutes (300s)
     await redis.set(`otp:${emailOrPhone}`, otp, "EX", 300);
 
-    // Development Console Logging
-    logger.info(`📨 [OTP DEV MODE] Generated OTP for ${emailOrPhone} is: ${otp}`);
+    const isEmail = emailOrPhone.includes("@");
+    if (isEmail && env.NODE_ENV === "production") {
+      await sendOtpEmail(emailOrPhone, otp, "login");
+    } else {
+      logger.info(`📨 [OTP] ${emailOrPhone} → ${otp}`);
+    }
     return otp;
   }
 
@@ -284,10 +288,13 @@ export class AuthService {
     }
 
     const otp = crypto.randomInt(100000, 999999).toString();
-    // Cache in Redis for 5 minutes
     await redis.set(`reg_otp:${type}:${value}`, otp, "EX", 300);
 
-    logger.info(`📨 [OTP SIGNUP DEV MODE] Generated signup OTP for ${type} ${value} is: ${otp}`);
+    if (type === "email" && env.NODE_ENV === "production") {
+      await sendOtpEmail(value, otp, "signup");
+    } else {
+      logger.info(`📨 [OTP SIGNUP] ${type} ${value} → ${otp}`);
+    }
     return otp;
   }
 
