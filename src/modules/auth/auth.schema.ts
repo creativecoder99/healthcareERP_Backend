@@ -29,7 +29,7 @@ export const registerPatientSchema = z.object({
   height: z.preprocess((val) => {
     if (val === "" || val === undefined || val === null) return undefined;
     return Number(val);
-  }, z.number().min(50).max(250).optional()),
+  }, z.number().min(50).max(300).optional()),
   weight: z.preprocess((val) => {
     if (val === "" || val === undefined || val === null) return undefined;
     return Number(val);
