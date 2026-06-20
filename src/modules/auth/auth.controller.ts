@@ -99,10 +99,8 @@ export class AuthController {
         message: "OTP sent successfully",
       };
 
-      // Always return OTP for email — frontend sends it via EmailJS
-      // For phone — only expose in non-production (no SMS service yet)
-      const isEmail = !!validated.email;
-      if (isEmail || env.NODE_ENV !== "production") {
+      // Only expose OTP outside production (Resend handles delivery in production)
+      if (env.NODE_ENV !== "production") {
         responseData.otp = otp;
       }
 
@@ -125,9 +123,8 @@ export class AuthController {
         message: `${validated.type === "email" ? "Email" : "Phone"} OTP sent successfully`,
       };
 
-      // Always return OTP for email — frontend sends it via EmailJS
-      // For phone — only expose in non-production (no SMS service yet)
-      if (validated.type === "email" || env.NODE_ENV !== "production") {
+      // Only expose OTP outside production (Resend handles delivery in production)
+      if (env.NODE_ENV !== "production") {
         responseData.otp = otp;
       }
 
