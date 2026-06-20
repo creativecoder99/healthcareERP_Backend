@@ -25,16 +25,11 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(data.password, 12);
     const phoneClean = data.phone.replace(/\s+/g, "");
 
-    // Verify registration OTP flags
+    // Verify registration OTP flags — email only (phone OTP is optional)
     if (env.NODE_ENV !== "test") {
       const emailVerified = await redis.get(`verified:email:${data.email}`);
-      const phoneVerified = await redis.get(`verified:phone:${phoneClean}`);
-
       if (emailVerified !== "true") {
         throw new AppError(400, "Email address has not been OTP-verified", "EMAIL_UNVERIFIED");
-      }
-      if (phoneVerified !== "true") {
-        throw new AppError(400, "Phone number has not been OTP-verified", "PHONE_UNVERIFIED");
       }
     }
 
@@ -107,7 +102,6 @@ export class AuthService {
 
       if (env.NODE_ENV !== "test") {
         await redis.del(`verified:email:${data.email}`);
-        await redis.del(`verified:phone:${phoneClean}`);
       }
 
       return { user, patient };
@@ -137,16 +131,11 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(data.password, 12);
     const phoneClean = data.phone.replace(/\s+/g, "");
 
-    // Verify registration OTP flags
+    // Verify registration OTP flags — email only (phone OTP is optional)
     if (env.NODE_ENV !== "test") {
       const emailVerified = await redis.get(`verified:email:${data.email}`);
-      const phoneVerified = await redis.get(`verified:phone:${phoneClean}`);
-
       if (emailVerified !== "true") {
         throw new AppError(400, "Email address has not been OTP-verified", "EMAIL_UNVERIFIED");
-      }
-      if (phoneVerified !== "true") {
-        throw new AppError(400, "Phone number has not been OTP-verified", "PHONE_UNVERIFIED");
       }
     }
 
@@ -189,7 +178,6 @@ export class AuthService {
 
       if (env.NODE_ENV !== "test") {
         await redis.del(`verified:email:${data.email}`);
-        await redis.del(`verified:phone:${phoneClean}`);
       }
 
       return { user, doctor };
