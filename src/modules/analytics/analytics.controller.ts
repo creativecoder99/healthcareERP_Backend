@@ -47,7 +47,7 @@ export class AnalyticsController {
   // Doctor-scoped: verifies the requesting doctor is linked to the patient
   static async doctorPatientTrends(req: Request, res: Response, next: NextFunction) {
     try {
-      const { patientId } = req.params;
+      const patientId = req.params.patientId as string;
       const doctor = await prisma.doctor.findUnique({ where: { userId: req.user!.id } });
       if (!doctor) throw new AppError(404, "Doctor profile not found", "PROFILE_NOT_FOUND");
 
