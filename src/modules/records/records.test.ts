@@ -191,8 +191,8 @@ describe("📂 Medical Records & Patient Profile Integration Tests", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.data.signedUrl).toContain("http://localhost:9000/medicore-documents");
-      expect(response.body.data.signedUrl).toContain("X-Amz-Expires=900");
+      expect(response.body.data.signedUrl).toContain("cloudinary.com");
+      expect(response.body.data.signedUrl).toContain("expires_at=");
     });
 
     it("should soft-delete the record and remove file from S3 bucket", async () => {

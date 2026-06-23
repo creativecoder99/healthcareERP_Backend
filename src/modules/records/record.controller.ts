@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { prisma } from "../../config/prisma";
 import { AppError } from "../../shared/middleware/errorHandler";
 import { RecordType, ProcessingStatus } from "@prisma/client";
-import { uploadFile, generateSignedUrl, deleteFile } from "../../shared/services/s3";
+import { uploadFile, generateSignedUrl, deleteFile } from "../../shared/services/cloudinary";
 import crypto from "crypto";
 import { z } from "zod";
 import { addAIProcessingJob } from "../../shared/services/queue";

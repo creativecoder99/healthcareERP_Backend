@@ -25,6 +25,10 @@ const envSchema = z.object({
   S3_BUCKET_DOCUMENTS: z.string().default("medicore-documents"),
   S3_REGION: z.string().default("us-east-1"),
 
+  CLOUDINARY_CLOUD_NAME: z.string().min(1),
+  CLOUDINARY_API_KEY: z.string().min(1),
+  CLOUDINARY_API_SECRET: z.string().min(1),
+
   RESEND_API_KEY: z.string().min(1),
   EMAIL_FROM: z.string().email().default("noreply@medicore.in"),
 
