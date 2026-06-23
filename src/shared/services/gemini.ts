@@ -290,7 +290,7 @@ function generateMockAnalysis(fileName: string): MedicalAnalysisResult {
 }
 
 /**
- * Fallback: Call Groq Llama 3.1 to generate a content stream for a chat conversation
+ * Fallback: Call Groq Llama 3.3 to generate a content stream for a chat conversation
  */
 async function generateGroqChatStream(
   contents: any[],
@@ -315,7 +315,7 @@ async function generateGroqChatStream(
         "Authorization": `Bearer ${env.GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: "llama-3.1-70b-versatile",
+        model: "llama-3.3-70b-versatile",
         messages: messages,
         stream: true
       })
@@ -372,14 +372,14 @@ async function generateGroqChatStream(
 }
 
 /**
- * Call Gemini 1.5 Flash to generate a content stream for a chat conversation (or Groq Llama 3.1 if configured)
+ * Call Gemini 1.5 Flash to generate a content stream for a chat conversation (or Groq Llama 3.3 if configured)
  */
 export async function generateChatStream(
   contents: any[],
   systemInstruction: string
 ): Promise<any> {
   if (env.GROQ_API_KEY) {
-    logger.info("🤖 Routing chat stream to Groq (Llama 3.1) as configured by GROQ_API_KEY");
+    logger.info("🤖 Routing chat stream to Groq (Llama 3.3) as configured by GROQ_API_KEY");
     return generateGroqChatStream(contents, systemInstruction);
   }
 
@@ -406,7 +406,7 @@ export async function generateChatStream(
     return responseStream;
   } catch (error: any) {
     if (env.GROQ_API_KEY) {
-      logger.info("🤖 Gemini stream failed, falling back to Groq (Llama 3.1) stream");
+      logger.info("🤖 Gemini stream failed, falling back to Groq (Llama 3.3) stream");
       return generateGroqChatStream(contents, systemInstruction);
     }
     logger.error(`❌ Gemini stream generation failed: ${error.message}. Falling back to mock stream...`);
