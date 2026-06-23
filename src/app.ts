@@ -54,6 +54,7 @@ import { linksRouter } from "./modules/linking/linking.routes";
 import { paymentRouter } from "./modules/payments/payment.routes";
 import { webhookRouter } from "./modules/webhooks/webhook.routes";
 import { analyticsRouter } from "./modules/analytics/analytics.routes";
+import { appointmentRouter } from "./modules/appointments/appointment.routes";
 import { ensureBucketExists } from "./shared/services/s3";
 
 app.use("/api/v1/auth", authRouter);
@@ -64,6 +65,7 @@ app.use("/api/v1/links", linksRouter);         // approve / deny / revoke links
 app.use("/api/v1/payments", paymentRouter);    // subscription, orders, verify
 app.use("/api/v1/webhooks", webhookRouter);    // Razorpay webhook (no auth)
 app.use("/api/v1/analytics", analyticsRouter); // analytics & trends
+app.use("/api/v1/appointments", appointmentRouter); // video consults & scheduling
 
 // Ensure S3 bucket is created on startup
 ensureBucketExists().catch((err) => {
@@ -75,9 +77,13 @@ app.use(errorHandler);
 
 import { createServer } from "http";
 import { initSocketServer } from "./shared/services/socket";
+import { startReminderScheduler } from "./shared/services/reminder.service";
 
 const httpServer = createServer(app);
 initSocketServer(httpServer);
+
+// Start background reminder scheduler
+startReminderScheduler();
 
 // ─── AI Worker (runs in-process for single-service deployment) ───────────────
 import("./workers/ai-worker")

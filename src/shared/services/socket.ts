@@ -2,6 +2,7 @@ import { Server as SocketIOServer } from "socket.io";
 import { Server as HttpServer } from "http";
 import { logger } from "../../config/logger";
 import { env } from "../../config/env";
+import { setupVideoSignaling } from "../../modules/video/video.signaling";
 
 let io: SocketIOServer | null = null;
 
@@ -36,6 +37,9 @@ export function initSocketServer(server: HttpServer) {
       logger.info(`🔌 Socket client disconnected: ${socket.id}`);
     });
   });
+
+  // Setup WebRTC signaling namespace
+  setupVideoSignaling(io);
 
   logger.info("📡 Socket.io server initialized successfully");
   return io;

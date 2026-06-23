@@ -92,3 +92,25 @@ export async function sendOtpEmail(to: string, otp: string, purpose: "login" | "
     return false;
   }
 }
+
+export async function sendEmail(to: string, subject: string, html: string) {
+  try {
+    const { data, error } = await resend.emails.send({
+      from: FROM,
+      to,
+      subject,
+      html,
+    });
+
+    if (error) {
+      logger.error(`Resend email failed to ${to}: ${JSON.stringify(error)}`);
+      return false;
+    }
+
+    logger.info(`Email sent to ${to} (id: ${data?.id})`);
+    return true;
+  } catch (err) {
+    logger.error(`Email service exception: ${err}`);
+    return false;
+  }
+}

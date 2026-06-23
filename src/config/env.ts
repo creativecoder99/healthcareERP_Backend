@@ -35,6 +35,9 @@ const envSchema = z.object({
   RAZORPAY_KEY_SECRET: z.string().min(1),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
 
+  TURN_SERVER_URL: z.string().optional(),
+  COTURN_SHARED_SECRET: z.string().optional(),
+
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(900000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(100),
 });
