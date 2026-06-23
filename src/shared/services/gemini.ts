@@ -255,3 +255,44 @@ function generateMockAnalysis(fileName: string): MedicalAnalysisResult {
     ],
   };
 }
+
+/**
+ * Call Gemini 1.5 Flash to generate a content stream for a chat conversation
+ */
+export async function generateChatStream(
+  contents: any[],
+  systemInstruction: string
+): Promise<any> {
+  if (!ai) {
+    logger.info("🤖 Gemini in offline mock mode. Generating mock response stream.");
+    return (async function* () {
+      const responseText = "Based on your uploaded reports, I have analyzed your vitals. Your Haemoglobin and white blood cell counts are stable and within standard physiological limits. However, please note that your TSH thyroid levels are slightly elevated in some reports. This is a general, non-diagnostic observation. I warmly recommend scheduling a clinical consult with your primary care provider or endocrinologist to discuss these parameters in detail.";
+      const chunks = responseText.split(" ");
+      for (const chunk of chunks) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        yield { text: chunk + " " };
+      }
+    })();
+  }
+
+  try {
+    const responseStream = await ai.models.generateContentStream({
+      model: "gemini-1.5-flash",
+      contents: contents,
+      config: {
+        systemInstruction: systemInstruction,
+      },
+    });
+    return responseStream;
+  } catch (error: any) {
+    logger.error(`❌ Gemini stream generation failed: ${error.message}. Falling back to mock stream...`);
+    return (async function* () {
+      const chunks = "Failed to reach Gemini servers. [LOCAL MOCK CHAT STREAM] Your report analysis indicates stable biomarkers. Please consult a physician.".split(" ");
+      for (const chunk of chunks) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        yield { text: chunk + " " };
+      }
+    })();
+  }
+}
+
