@@ -4,12 +4,14 @@ import { logger } from "../../config/logger";
 
 let ai: GoogleGenAI | null = null;
 
-// Initialize GoogleGenAI client if API key is present
-if (env.GEMINI_API_KEY) {
+const isPlaceholderKey = (key?: string) => !key || key.trim() === "" || key.startsWith("AQ.");
+
+// Initialize GoogleGenAI client if API key is present and not a placeholder
+if (env.GEMINI_API_KEY && !isPlaceholderKey(env.GEMINI_API_KEY)) {
   ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
   logger.info("🤖 Google Gemini service initialized with API Key");
 } else {
-  logger.warn("⚠️ GEMINI_API_KEY is not set. Google Gemini service will run in OFFLINE MOCK MODE.");
+  logger.warn("⚠️ GEMINI_API_KEY is not set or is a placeholder. Google Gemini service will run in OFFLINE MOCK MODE.");
 }
 
 export interface ExtractedBiomarker {
@@ -99,9 +101,40 @@ Ensure all numeric values are numbers, not strings. Normalize parameter keys to 
 }
 
 /**
- * Generate 768-dimensional embeddings using Gemini's text-embedding-004 model
+ * Fallback: Generate 768-dimensional embeddings using a free Hugging Face model
+ */
+async function generateHuggingFaceEmbedding(text: string): Promise<number[]> {
+  try {
+    const response = await fetch(
+      "https://api-inference.huggingface.co/models/sentence-transformers/all-mpnet-base-v2",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inputs: text }),
+      }
+    );
+    if (!response.ok) {
+      throw new Error(`HuggingFace API returned status: ${response.status}`);
+    }
+    const result = await response.json();
+    if (Array.isArray(result) && typeof result[0] === "number") {
+      return result;
+    }
+    throw new Error("Invalid embedding response format");
+  } catch (error: any) {
+    logger.warn(`⚠️ HuggingFace embedding fallback failed: ${error.message}. Returning mock vector...`);
+    return generateMockVector(768);
+  }
+}
+
+/**
+ * Generate 768-dimensional embeddings using Gemini's text-embedding-004 model (or HuggingFace if offline)
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
+  if (env.GROQ_API_KEY) {
+    return generateHuggingFaceEmbedding(text);
+  }
+
   if (!ai) {
     // Return mock 768-dim vector in offline mode
     return generateMockVector(768);
@@ -257,12 +290,99 @@ function generateMockAnalysis(fileName: string): MedicalAnalysisResult {
 }
 
 /**
- * Call Gemini 1.5 Flash to generate a content stream for a chat conversation
+ * Fallback: Call Groq Llama 3.1 to generate a content stream for a chat conversation
+ */
+async function generateGroqChatStream(
+  contents: any[],
+  systemInstruction: string
+): Promise<any> {
+  try {
+    const messages = [];
+    messages.push({ role: "system", content: systemInstruction });
+    
+    for (const c of contents) {
+      const text = c.parts.map((p: any) => p.text).join("\n");
+      messages.push({
+        role: c.role === "model" || c.role === "assistant" ? "assistant" : "user",
+        content: text
+      });
+    }
+
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${env.GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "llama-3.1-70b-versatile",
+        messages: messages,
+        stream: true
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Groq API returned ${response.status}: ${response.statusText}`);
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+
+    return (async function* () {
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader!.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          if (trimmed.startsWith("data: ")) {
+            const dataStr = trimmed.slice(6).trim();
+            if (dataStr === "[DONE]") {
+              break;
+            }
+            try {
+              const dataObj = JSON.parse(dataStr);
+              const text = dataObj.choices?.[0]?.delta?.content || "";
+              if (text) {
+                yield { text };
+              }
+            } catch (err) {
+              // ignore parse errors on partial streams
+            }
+          }
+        }
+      }
+    })();
+  } catch (error: any) {
+    logger.error(`❌ Groq stream generation failed: ${error.message}. Falling back to mock stream...`);
+    return (async function* () {
+      const chunks = "Failed to reach Groq servers. [LOCAL MOCK CHAT STREAM] Your report analysis indicates stable biomarkers. Please consult a physician.".split(" ");
+      for (const chunk of chunks) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        yield { text: chunk + " " };
+      }
+    })();
+  }
+}
+
+/**
+ * Call Gemini 1.5 Flash to generate a content stream for a chat conversation (or Groq Llama 3.1 if configured)
  */
 export async function generateChatStream(
   contents: any[],
   systemInstruction: string
 ): Promise<any> {
+  if (env.GROQ_API_KEY) {
+    logger.info("🤖 Routing chat stream to Groq (Llama 3.1) as configured by GROQ_API_KEY");
+    return generateGroqChatStream(contents, systemInstruction);
+  }
+
   if (!ai) {
     logger.info("🤖 Gemini in offline mock mode. Generating mock response stream.");
     return (async function* () {
@@ -285,6 +405,10 @@ export async function generateChatStream(
     });
     return responseStream;
   } catch (error: any) {
+    if (env.GROQ_API_KEY) {
+      logger.info("🤖 Gemini stream failed, falling back to Groq (Llama 3.1) stream");
+      return generateGroqChatStream(contents, systemInstruction);
+    }
     logger.error(`❌ Gemini stream generation failed: ${error.message}. Falling back to mock stream...`);
     return (async function* () {
       const chunks = "Failed to reach Gemini servers. [LOCAL MOCK CHAT STREAM] Your report analysis indicates stable biomarkers. Please consult a physician.".split(" ");

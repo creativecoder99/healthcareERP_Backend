@@ -79,7 +79,7 @@ const worker = new Worker(
             extractedRaw: JSON.stringify(analysis.extractedValues),
             confidence: analysis.confidence,
             flaggedValues: JSON.stringify(analysis.extractedValues.filter((v) => v.isAbnormal)),
-            modelVersion: env.GEMINI_API_KEY ? "gemini-1.5-flash" : "mock-dev-engine",
+            modelVersion: env.GEMINI_API_KEY && !env.GEMINI_API_KEY.startsWith("AQ.") ? "gemini-1.5-flash" : "mock-dev-engine",
           },
           update: {
             summaryText: analysis.summaryText,
@@ -87,7 +87,7 @@ const worker = new Worker(
             extractedRaw: JSON.stringify(analysis.extractedValues),
             confidence: analysis.confidence,
             flaggedValues: JSON.stringify(analysis.extractedValues.filter((v) => v.isAbnormal)),
-            modelVersion: env.GEMINI_API_KEY ? "gemini-1.5-flash" : "mock-dev-engine",
+            modelVersion: env.GEMINI_API_KEY && !env.GEMINI_API_KEY.startsWith("AQ.") ? "gemini-1.5-flash" : "mock-dev-engine",
           },
         });
 
