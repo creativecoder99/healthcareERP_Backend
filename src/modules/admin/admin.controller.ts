@@ -279,7 +279,7 @@ export class AdminController {
    */
   static async updatePatient(req: Request, res: Response, next: NextFunction) {
     try {
-      const { id } = req.params; // Patient User ID
+      const id = req.params.id as string; // Patient User ID
       const validated = adminUpdatePatientSchema.parse(req.body);
 
       const user = await prisma.user.findUnique({
@@ -344,7 +344,7 @@ export class AdminController {
    */
   static async deletePatient(req: Request, res: Response, next: NextFunction) {
     try {
-      const { id } = req.params; // Patient User ID
+      const id = req.params.id as string; // Patient User ID
 
       const user = await prisma.user.findUnique({
         where: { id },
@@ -372,7 +372,7 @@ export class AdminController {
    */
   static async toggleSuspendUser(req: Request, res: Response, next: NextFunction) {
     try {
-      const { id } = req.params; // User ID
+      const id = req.params.id as string; // User ID
 
       const user = await prisma.user.findUnique({
         where: { id },
@@ -491,7 +491,7 @@ export class AdminController {
    */
   static async processRefund(req: Request, res: Response, next: NextFunction) {
     try {
-      const { id } = req.params; // Payment ID
+      const id = req.params.id as string; // Payment ID
 
       const payment = await prisma.payment.findUnique({
         where: { id },
