@@ -56,6 +56,7 @@ import { webhookRouter } from "./modules/webhooks/webhook.routes";
 import { analyticsRouter } from "./modules/analytics/analytics.routes";
 import { appointmentRouter } from "./modules/appointments/appointment.routes";
 import { chatRouter } from "./modules/chat/chat.routes";
+import { adminRouter } from "./modules/admin/admin.routes";
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/patient", patientRouter);     // patient profile + invite doctor
 app.use("/api/v1/records", recordRouter);      // patient record uploads
@@ -66,6 +67,8 @@ app.use("/api/v1/webhooks", webhookRouter);    // Razorpay webhook (no auth)
 app.use("/api/v1/analytics", analyticsRouter); // analytics & trends
 app.use("/api/v1/appointments", appointmentRouter); // video consults & scheduling
 app.use("/api/v1/chat", chatRouter);           // AI chatbot & briefs
+app.use("/api/v1/admin", adminRouter);         // platform admin dashboards
+
 
 // ─── Error Handler (must be last) ────────────────────────────────────────────
 app.use(errorHandler);

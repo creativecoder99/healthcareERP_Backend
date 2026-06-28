@@ -70,6 +70,7 @@ model Patient {
   emergencyContact Json? // {name, phone, relation}
   insuranceInfo    Json? // {provider, policyNumber, expiryDate}
   avatarUrl        String?
+  state            String?
 
   medicalRecords MedicalRecord[]
   linkedDoctors  PatientDoctorLink[]
